@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "zig",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "code/main.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -33,7 +33,7 @@ pub fn build(b: *std.Build) void {
     // ====== Tests
 
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "code/main.zig" },
         .target = target,
         .optimize = optimize,
     });

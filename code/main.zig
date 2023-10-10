@@ -2,14 +2,17 @@ const std = @import("std");
 const raylib = @import("raylib");
 const raygui = @import("raygui.zig");
 
-pub fn renderGUI() void {
+pub fn renderGUI() !void {
+    try raygui.pushStyleColor(raygui.StyleColor.Button, raylib.RED);
+    raygui.popStyleColor(raygui.StyleColor.Button);
+
     const rec = raylib.Rectangle{ .x = 10, .y = 10, .width = 200, .height = 100 };
     if (raygui.button(rec)) {
         std.debug.print("\nPressed button", .{});
     }
 }
 
-pub fn main() void {
+pub fn main() !void {
     raylib.SetConfigFlags(raylib.ConfigFlags{ .FLAG_WINDOW_RESIZABLE = false });
     raylib.InitWindow(800, 800, "hello world!");
     raylib.SetTargetFPS(60);
@@ -23,6 +26,6 @@ pub fn main() void {
 
         raylib.DrawFPS(10, 10);
         raylib.DrawText("hello world!", 100, 100, 20, raylib.YELLOW);
-        renderGUI();
+        try renderGUI();
     }
 }

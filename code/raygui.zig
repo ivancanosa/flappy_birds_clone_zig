@@ -11,14 +11,12 @@ pub const StyleColor = enum {
 };
 
 pub const StyleVarFloat = enum {
+    TextSize,
+    TextSpacing,
     Alpha, // float     Alpha
     DisabledAlpha, // float     DisabledAlpha
-    WindowRounding, // float     WindowRounding
-    WindowBorderSize, // float     WindowBorderSize
-    ChildRounding, // float     ChildRounding
-    ChildBorderSize, // float     ChildBorderSize
-    PopupRounding, // float     PopupRounding
-    PopupBorderSize, // float     PopupBorderSize
+    Rounding, // float     ChildRounding
+    BorderSize, // float     ChildBorderSize
     FrameRounding, // float     FrameRounding
     FrameBorderSize, // float     FrameBorderSize
     IndentSpacing, // float     IndentSpacing
@@ -51,71 +49,143 @@ pub const Context = struct {
     styleColorArray: [styleColorCount]std.ArrayList(raylib.Color),
     styleVarFloatArray: [styleVarFloatCount]std.ArrayList(f32),
     styleVarVec2Array: [styleVarVec2Count]std.ArrayList(raylib.Vector2),
+    fontArray: std.ArrayList(*raylib.Font),
+
     allocator: std.mem.Allocator,
 
-    pub fn init(ally: std.mem.Allocator) Self {
+    pub fn init(ally: std.mem.Allocator) !Self {
         var result = Self{
             .styleColorArray = undefined,
             .styleVarFloatArray = undefined,
             .styleVarVec2Array = undefined,
+            .fontArray = undefined,
             .allocator = ally,
         };
 
         for (0..styleColorCount) |i| {
             result.styleColorArray[i] = std.ArrayList(raylib.Color).init(result.allocator);
         }
+        for (0..styleVarFloatCount) |i| {
+            result.styleVarFloatArray[i] = std.ArrayList(f32).init(result.allocator);
+        }
+        for (0..styleVarVec2Count) |i| {
+            result.styleVarVec2Array[i] = std.ArrayList(raylib.Vector2).init(result.allocator);
+        }
+
+        result.fontArray = std.ArrayList(*raylib.Font).init(result.allocator);
+        try initializeContext(&result);
         return result;
+    }
+
+    pub fn deinit(self: *Self) void {
+        for (0..styleColorCount) |i| {
+            self.styleColorArray[i].deinit();
+        }
+        for (0..styleVarFloatCount) |i| {
+            self.styleVarFloatArray[i].deinit();
+        }
+        for (0..styleVarVec2Count) |i| {
+            self.styleVarVec2Array[i].deinit();
+        }
     }
 };
 
-pub var defaultContext = Context.init(std.heap.page_allocator);
-pub var currentContext: *Context = &defaultContext;
+pub var activeContext: *Context = undefined;
+
+pub fn text(x: i32, y: i32, str: [*:0]const u8) void {
+    const fontSize: i32 = @intFromFloat(frontStyleVarFloat(StyleVarFloat.TextSize));
+    raylib.DrawText(str, x, y, fontSize, frontStyleColor(StyleColor.Text));
+}
 
 pub fn button(rec: raylib.Rectangle) bool {
     const point = raylib.GetMousePosition();
-    raylib.DrawRectangleRounded(rec, 0.2, 0, raylib.RED);
+    var color: raylib.Color = undefined;
+    var isPressed: bool = false;
+
     if (raylib.CheckCollisionPointRec(point, rec)) {
         if (raylib.IsMouseButtonReleased(raylib.MouseButton.MOUSE_BUTTON_LEFT)) {
-            return true;
+            color = frontStyleColor(StyleColor.ButtonActive);
+            isPressed = true;
+        } else if (raylib.IsMouseButtonDown(raylib.MouseButton.MOUSE_BUTTON_LEFT)) {
+            color = frontStyleColor(StyleColor.ButtonActive);
+        } else {
+            color = frontStyleColor(StyleColor.ButtonHovered);
         }
+    } else {
+        color = frontStyleColor(StyleColor.Button);
     }
-    return false;
+
+    raylib.DrawRectangleRounded(rec, frontStyleVarFloat(StyleVarFloat.Rounding), 0, color);
+
+    return isPressed;
 }
 
 // Push, pop, front functions
 
 pub fn pushStyleColor(style: StyleColor, color: raylib.Color) !void {
-    try currentContext.styleColorArray[@intFromEnum(style)].append(color);
+    try activeContext.styleColorArray[@intFromEnum(style)].append(color);
 }
 
 pub fn popStyleColor(style: StyleColor) void {
-    _ = currentContext.styleColorArray[@intFromEnum(style)].pop();
+    _ = activeContext.styleColorArray[@intFromEnum(style)].pop();
 }
 
 pub fn frontStyleColor(style: StyleColor) raylib.Color {
-    return currentContext.styleColorArray[@intFromEnum(style)].getLast();
+    return activeContext.styleColorArray[@intFromEnum(style)].getLast();
 }
 
 pub fn pushStyleVarFloat(style: StyleVarFloat, value: f32) !void {
-    try currentContext.styleVarFloatArray[@intFromEnum(style)].append(value);
+    try activeContext.styleVarFloatArray[@intFromEnum(style)].append(value);
 }
 
 pub fn popStyleVarFloat(style: StyleVarFloat) void {
-    _ = currentContext.styleVarFloatArray[@intFromEnum(style)].pop();
+    _ = activeContext.styleVarFloatArray[@intFromEnum(style)].pop();
 }
 
-pub fn frontStyleVarFloat(style: StyleVarFloat) raylib.Color {
-    return currentContext.styleVarFloatArray[@intFromEnum(style)].getLast();
+pub fn frontStyleVarFloat(style: StyleVarFloat) f32 {
+    return activeContext.styleVarFloatArray[@intFromEnum(style)].getLast();
 }
 
 pub fn pushStyleVarVec2(style: StyleVarVec2, value: raylib.Vector2) !void {
-    try currentContext.styleVarVec2[@intFromEnum(style)].append(value);
+    try activeContext.styleVarVec2[@intFromEnum(style)].append(value);
 }
 
 pub fn popStyleVarVec2(style: StyleVarVec2) void {
-    _ = currentContext.styleVarVec2[@intFromEnum(style)].pop();
+    _ = activeContext.styleVarVec2[@intFromEnum(style)].pop();
 }
 
-pub fn frontStyleVarVec2(style: StyleVarVec2) raylib.Color {
-    return currentContext.styleVarVec2[@intFromEnum(style)].getLast();
+pub fn frontStyleVarVec2(style: StyleVarVec2) raylib.Vector2 {
+    return activeContext.styleVarVec2[@intFromEnum(style)].getLast();
+}
+
+fn initializeContext(ctx: *Context) !void {
+    try ctx.styleColorArray[@intFromEnum(StyleColor.Text)].append(raylib.WHITE);
+    try ctx.styleColorArray[@intFromEnum(StyleColor.Button)].append(raylib.RED);
+    try ctx.styleColorArray[@intFromEnum(StyleColor.ButtonHovered)].append(raylib.WHITE);
+    try ctx.styleColorArray[@intFromEnum(StyleColor.ButtonActive)].append(raylib.YELLOW);
+
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.TextSize)].append(16);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.TextSpacing)].append(1);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.Alpha)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.DisabledAlpha)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.Rounding)].append(0.2);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.BorderSize)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.FrameRounding)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.FrameBorderSize)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.IndentSpacing)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.ScrollbarSize)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.ScrollbarRounding)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.GrabMinSize)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.GrabRounding)].append(0);
+    try ctx.styleVarFloatArray[@intFromEnum(StyleVarFloat.TabRounding)].append(0);
+
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.WindowPadding)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.WindowMinSize)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.WindowTitleAlign)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.FramePadding)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.ItemSpacing)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.ItemInnerSpacing)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.CellPadding)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.ButtonTextAlign)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
+    try ctx.styleVarVec2Array[@intFromEnum(StyleVarVec2.SelectableTextAlign)].append(raylib.Vector2{ .x = 0.0, .y = 0.0 });
 }

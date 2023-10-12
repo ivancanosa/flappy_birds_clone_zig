@@ -1,31 +1,46 @@
 const std = @import("std");
-const raylib = @import("raylib");
-const raygui = @import("raygui.zig");
+const rl = @import("raylib");
+const rg = @import("raygui.zig");
 
 pub fn renderGUI() !void {
-    try raygui.pushStyleColor(raygui.StyleColor.Button, raylib.RED);
-    raygui.popStyleColor(raygui.StyleColor.Button);
+    try rg.pushStyleColor(rg.StyleColor.Text, rl.WHITE);
+    defer rg.popStyleColor(rg.StyleColor.Text);
 
-    const rec = raylib.Rectangle{ .x = 10, .y = 10, .width = 200, .height = 100 };
-    if (raygui.button(rec)) {
+    try rg.pushStyleColor(rg.StyleColor.Button, rl.RED);
+    try rg.pushStyleColor(rg.StyleColor.ButtonActive, rl.WHITE);
+    try rg.pushStyleColor(rg.StyleColor.ButtonHovered, rl.YELLOW);
+    try rg.pushStyleVarFloat(rg.StyleVarFloat.Rounding, 0.3);
+    defer rg.popStyleColor(rg.StyleColor.Button);
+    defer rg.popStyleColor(rg.StyleColor.ButtonActive);
+    defer rg.popStyleColor(rg.StyleColor.ButtonHovered);
+    defer rg.popStyleVarFloat(rg.StyleVarFloat.Rounding);
+
+    const rec = rl.Rectangle{ .x = 10, .y = 10, .width = 200, .height = 100 };
+    if (rg.button(rec)) {
         std.debug.print("\nPressed button", .{});
     }
+    rg.text(400, 400, "This is a custom text with white color");
 }
 
 pub fn main() !void {
-    raylib.SetConfigFlags(raylib.ConfigFlags{ .FLAG_WINDOW_RESIZABLE = false });
-    raylib.InitWindow(800, 800, "hello world!");
-    raylib.SetTargetFPS(60);
+    rl.SetConfigFlags(rl.ConfigFlags{ .FLAG_WINDOW_RESIZABLE = false });
+    rl.InitWindow(800, 800, "hello world!");
+    rl.SetTargetFPS(60);
 
-    defer raylib.CloseWindow();
+    defer rl.CloseWindow();
 
-    while (!raylib.WindowShouldClose()) {
-        raylib.BeginDrawing();
-        defer raylib.EndDrawing();
-        raylib.ClearBackground(raylib.BLACK);
+    // Setup style context
+    var ctx = try rg.Context.init(std.heap.page_allocator);
+    defer ctx.deinit();
+    rg.activeContext = &ctx;
 
-        raylib.DrawFPS(10, 10);
-        raylib.DrawText("hello world!", 100, 100, 20, raylib.YELLOW);
+    while (!rl.WindowShouldClose()) {
+        rl.BeginDrawing();
+        defer rl.EndDrawing();
+        rl.ClearBackground(rl.BLACK);
+
+        rl.DrawFPS(10, 10);
+        rl.DrawText("hello world!", 100, 100, 20, rl.YELLOW);
         try renderGUI();
     }
 }

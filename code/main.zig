@@ -3,6 +3,18 @@ const rl = @import("raylib");
 const rg = @import("raygui.zig");
 
 pub fn renderGUI() !void {
+    const frame = rg.Frame{ .rec = .{ .x = 100, .y = 100, .width = 400, .height = 400 } };
+    const frame2 = rg.Frame{ .rec = .{ .x = 60, .y = 10, .width = 50, .height = 50 } };
+
+    try rg.pushStyleVarFloat(rg.StyleVarFloat.Rounding, 0.1);
+    defer rg.popStyleVarFloat(rg.StyleVarFloat.Rounding);
+
+    try frame.activate();
+    defer frame.deactivate();
+
+    try frame2.activate();
+    defer frame2.deactivate();
+
     try rg.pushStyleColor(rg.StyleColor.Text, rl.WHITE);
     defer rg.popStyleColor(rg.StyleColor.Text);
 
@@ -19,7 +31,9 @@ pub fn renderGUI() !void {
     if (rg.button(rec)) {
         std.debug.print("\nPressed button", .{});
     }
-    rg.text(400, 400, "This is a custom text with white color");
+
+    var myText = "This is a custom text with white color";
+    rg.text(0, 40, myText);
 }
 
 pub fn main() !void {
@@ -37,7 +51,7 @@ pub fn main() !void {
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
         defer rl.EndDrawing();
-        rl.ClearBackground(rl.BLACK);
+        rl.ClearBackground(rl.Color{ .r = 33, .g = 33, .b = 33, .a = 255 });
 
         rl.DrawFPS(10, 10);
         rl.DrawText("hello world!", 100, 100, 20, rl.YELLOW);

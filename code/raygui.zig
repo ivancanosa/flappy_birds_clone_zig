@@ -3,8 +3,22 @@ const rl = @import("raylib");
 
 const styleStackSize = 16;
 
+const HorizontalFloat = enum {
+    None,
+    Left,
+    Right,
+};
+
+const VerticalFloat = enum {
+    None,
+    Top,
+    Bottom,
+};
+
 pub const StyleColor = enum {
     Text,
+    TextHovered,
+    TextActive,
     Button,
     ButtonHovered,
     ButtonActive,
@@ -102,11 +116,18 @@ pub const Context = struct {
 pub const Frame = struct {
     const Self = @This();
 
-    rec: rl.Rectangle,
+    rec: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
+    hFloat: HorizontalFloat = HorizontalFloat.None,
+    vFloat: VerticalFloat = VerticalFloat.None,
 
     pub fn activate(self: *const Self) !void {
         var frame = frontStyleVarVec2(StyleVarVec2.FramePos);
-        const newRec = rl.Rectangle{ .x = self.rec.x + frame.x, .y = self.rec.y + frame.y, .width = self.rec.width, .height = self.rec.height };
+        const newRec = rl.Rectangle{
+            .x = self.rec.x + frame.x, //
+            .y = self.rec.y + frame.y, //
+            .width = self.rec.width, //
+            .height = self.rec.height,
+        };
         try pushStyleVarVec2(StyleVarVec2.FramePos, .{ .x = newRec.x, .y = newRec.y });
         try pushStyleVarVec2(StyleVarVec2.FrameSize, .{ .x = newRec.width, .y = newRec.height });
         rl.DrawRectangleRounded(newRec, //
@@ -117,7 +138,7 @@ pub const Frame = struct {
             frontStyleVarFloat(StyleVarFloat.Rounding), //
             0, //
             frontStyleVarFloat(StyleVarFloat.BorderSize), //
-            frontStyleColor(StyleColor.Border)); //
+            frontStyleColor(StyleColor.Border));
         activeContext.cursorPos = rl.Vector2{ .x = newRec.x, .y = newRec.y };
     }
 
@@ -147,6 +168,44 @@ pub fn text(x: i32, y: i32, str: [*:0]const u8) void {
     fy += y;
     rl.DrawText(str, fx, fy, fontSize, frontStyleColor(StyleColor.Text));
     activeContext.cursorPos.y += @floatFromInt(fontSize);
+}
+
+pub fn checkBox(x: i32, y: i32, active: *bool, str: [*:0]const u8) bool {
+    const fontSize: i32 = @intFromFloat(frontStyleVarFloat(StyleVarFloat.TextSize));
+    const pos = frontStyleVarVec2(StyleVarVec2.FramePos);
+    var fx: i32 = @intFromFloat(pos.x);
+    fx += x;
+    var fy: i32 = @intFromFloat(pos.y);
+    fy += y;
+    const absoluteRec = rl.Rectangle{
+        .x = @floatFromInt(fx),
+        .y = @floatFromInt(fy), //
+        .width = @floatFromInt(fontSize), //
+        .height = @floatFromInt(fontSize),
+    };
+
+    const point = rl.GetMousePosition();
+    if (rl.CheckCollisionPointRec(point, absoluteRec)) {
+        if (rl.IsMouseButtonReleased(rl.MouseButton.MOUSE_BUTTON_LEFT)) {
+            //        color = frontStyleColor(StyleColor.ButtonActive);
+            active.* = !(active.*);
+        } else if (rl.IsMouseButtonDown(rl.MouseButton.MOUSE_BUTTON_LEFT)) {
+            //       color = frontStyleColor(StyleColor.ButtonActive);
+        } else {
+            //      color = frontStyleColor(StyleColor.ButtonHovered);
+        }
+    } else {
+        // color = frontStyleColor(StyleColor.Button);
+    }
+
+    rl.DrawRectangleLines(fx, fy, fontSize, fontSize, frontStyleColor(StyleColor.Border));
+    text(x + fontSize + 3, y, str);
+
+    if (active.*) {
+        text(x + 2, y, "X");
+    }
+
+    return active.*;
 }
 
 pub fn button(relativeRec: rl.Rectangle) bool {

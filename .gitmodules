@@ -1,3 +1,6 @@
 [submodule "submodules/raylib.zig"]
 	path = submodules/raylib.zig
 	url = https://github.com/ryupold/raylib.zig
+[submodule "data/flappy-bird-assets"]
+	path = data/flappy-bird-assets
+	url = https://github.com/samuelcust/flappy-bird-assets

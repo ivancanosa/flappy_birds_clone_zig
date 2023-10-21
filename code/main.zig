@@ -15,6 +15,13 @@ const tubeWindow: f32 = 150;
 const playerSize: i32 = 50;
 var birdTex: rl.Texture2D = undefined;
 var tubeTex: rl.Texture2D = undefined;
+var backTex: rl.Texture2D = undefined;
+var jumpSound: rl.Sound = undefined;
+var score: u32 = 0;
+
+const ScoreHitbox = struct {
+    used: bool = false,
+};
 
 const Player = struct {
     rotation: f32 = 0.0,
@@ -31,6 +38,7 @@ const Entity = struct {
 
     player: ?Player = null,
     tube: ?Tube = null,
+    scoreHitbox: ?ScoreHitbox = null,
 };
 
 pub fn input(entities: EntityList) void {
@@ -38,10 +46,17 @@ pub fn input(entities: EntityList) void {
         if (entity.player) |*player| {
             _ = player;
             if (rl.IsKeyPressed(rl.KeyboardKey.KEY_SPACE)) {
+                rl.PlaySound(jumpSound);
                 entity.speed.y = upSpeed;
             }
         }
     }
+}
+
+pub fn resetGame(entities: *EntityList) !void {
+    entities.clearRetainingCapacity();
+    score = 0;
+    try entities.append(Entity{ .size = .{ .x = playerSize, .y = playerSize }, .player = Player{} });
 }
 
 var accTime: f32 = 0;
@@ -65,15 +80,24 @@ pub fn systemTubeSpawn(entities: *EntityList) void {
         newTube.tube.?.inverted = true;
         entities.append(newTube) catch unreachable;
 
+        var hitbox = Entity{ .size = .{ .x = 10, .y = 1800 }, .scoreHitbox = .{} };
+        hitbox.position = .{ .x = windowSize.x + 60, .y = 0 };
+        hitbox.speed.x = tubeSpeed;
+        entities.append(hitbox) catch unreachable;
+
         accTime = 0;
     }
     for (entities.items, 0..) |*entity, i| {
         if (entity.tube) |*tube| {
             _ = tube;
             entity.position.x += entity.speed.x * dt;
-            if (entity.position.x <= -200) {
-                removePos = i;
-            }
+        } else if (entity.scoreHitbox) |*scoreHitbox| {
+            _ = scoreHitbox;
+            entity.position.x += entity.speed.x * dt;
+        }
+
+        if (entity.position.x <= -200) {
+            removePos = i;
         }
     }
     if (removePos) |i| {
@@ -92,8 +116,9 @@ pub fn systemPlayer(entities: EntityList) void {
     }
 }
 
-pub fn systemCollision(entities: EntityList) void {
+pub fn systemCollision(entities: *EntityList) !void {
     var playerEnt: Entity = undefined;
+    var reset = false;
     for (entities.items) |entity| {
         if (entity.player) |_| {
             playerEnt = entity;
@@ -106,38 +131,83 @@ pub fn systemCollision(entities: EntityList) void {
         .width = playerEnt.size.x, //
         .height = playerEnt.size.y,
     };
-    for (entities.items) |entity| {
+    for (entities.items) |*entity| {
+        var recEntity = rl.Rectangle{
+            .x = entity.position.x, //
+            .y = entity.position.y, //
+            .width = entity.size.x, //
+            .height = entity.size.y,
+        };
+
         if (entity.tube) |_| {
-            var recTube = rl.Rectangle{
+            if (rl.CheckCollisionRecs(recPlayer, recEntity)) {
+                reset = true;
+            }
+        }
+        if (entity.scoreHitbox) |*s_hitbox| {
+            if (s_hitbox.used) {
+                continue;
+            }
+            if (rl.CheckCollisionRecs(recPlayer, recEntity)) {
+                s_hitbox.used = true;
+                score += 1;
+            }
+        }
+    }
+    if (reset) {
+        try resetGame(entities);
+    }
+}
+
+pub fn render(entities: EntityList) !void {
+    {
+        const patch = rl.NPatchInfo{
+            .source = .{ .x = 0, .y = 0, .width = @floatFromInt(backTex.width), .height = @floatFromInt(backTex.height) }, //
+            .left = 0, //
+            .top = 0, //
+            .right = 0, //
+            .bottom = 0, //
+            .layout = 0,
+        };
+        const destRec = rl.Rectangle{
+            .x = 0, //
+            .y = 0, //
+            .width = windowSize.x, //
+            .height = windowSize.y,
+        };
+        rl.DrawTextureNPatch(backTex, patch, destRec, .{}, 0, rl.WHITE);
+    }
+
+    for (entities.items) |entity| {
+        if (entity.player != null) {
+            rl.DrawTextureEx(birdTex, entity.position, 0, 1.0, rl.WHITE);
+        } else if (entity.tube) |tube| {
+            var scale: f32 = -1.0;
+            if (tube.inverted) {
+                scale = 1.0;
+            }
+            const patch = rl.NPatchInfo{
+                .source = .{ .x = 0, .y = 0, .width = 52, .height = scale * 320 }, //
+                .left = 0, //
+                .top = 0, //
+                .right = 0, //
+                .bottom = 0, //
+                .layout = 0,
+            };
+            const destRec = rl.Rectangle{
                 .x = entity.position.x, //
                 .y = entity.position.y, //
                 .width = entity.size.x, //
                 .height = entity.size.y,
             };
-            if (rl.CheckCollisionRecs(recPlayer, recTube)) {
-                std.debug.print("Collision\n", .{});
-            }
+            rl.DrawTextureNPatch(tubeTex, patch, destRec, .{}, 0, rl.WHITE);
         }
     }
-}
 
-pub fn render(entities: EntityList) void {
-    for (entities.items) |entity| {
-        if (entity.player != null) {
-            rl.DrawTextureEx(birdTex, entity.position, 0, 1.0, rl.WHITE);
-        } else if (entity.tube) |tube| {
-            var scale: f32 = 1.0;
-            if (tube.inverted) {
-                scale = 1.0;
-            }
-            rl.DrawTextureEx(tubeTex, entity.position, 0, scale, rl.WHITE);
-            rl.DrawRectangleLines(@intFromFloat(entity.position.x), //
-                @intFromFloat(entity.position.y), //
-                @intFromFloat(entity.size.x), //
-                @intFromFloat(entity.size.y), //
-                rl.RED);
-        }
-    }
+    var ally = std.heap.page_allocator;
+    var str = try std.fmt.allocPrintZ(ally, "{}", .{score});
+    rl.DrawText(str, 50, 50, 26, rl.WHITE);
+    ally.free(str);
 }
 
 pub fn main() !void {
@@ -147,9 +217,10 @@ pub fn main() !void {
 
     rl.SetConfigFlags(rl.ConfigFlags{ .FLAG_WINDOW_RESIZABLE = false });
     rl.InitWindow(windowSize.x, windowSize.y, "hello world!");
-    rl.SetTargetFPS(60);
-
     defer rl.CloseWindow();
+
+    rl.InitAudioDevice();
+    rl.SetTargetFPS(60);
 
     var entities = EntityList.init(allocator);
     defer entities.deinit();
@@ -163,6 +234,9 @@ pub fn main() !void {
 
     birdTex = rl.LoadTexture("data/flappy-bird-assets/sprites/redbird-downflap.png");
     tubeTex = rl.LoadTexture("data/flappy-bird-assets/sprites/pipe-green.png");
+    backTex = rl.LoadTexture("data/flappy-bird-assets/sprites/background-day.png");
+    //    jumpSound = rl.LoadSound("data/flappy-bird-assets/audio/wing.wav");
+
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
         defer rl.EndDrawing();
@@ -172,7 +246,7 @@ pub fn main() !void {
 
         systemTubeSpawn(&entities);
         systemPlayer(entities);
-        systemCollision(entities);
-        render(entities);
+        try systemCollision(&entities);
+        try render(entities);
     }
 }

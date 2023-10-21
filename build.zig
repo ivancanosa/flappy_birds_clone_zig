@@ -13,6 +13,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    exe.linkLibC();
+
     raylib.addTo(b, exe, target, optimize);
 
     b.installArtifact(exe);
